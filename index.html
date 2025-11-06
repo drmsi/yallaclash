@@ -17,7 +17,7 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             background-attachment: fixed;
-            min-height: 300vh;
+            min-height: 600vh;
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
@@ -243,9 +243,10 @@
     </div>
 
     <div class="game-info">
-        <div>Hold mouse to spawn blocks!</div>
-        <div>Click blocks to launch them!</div>
-        <div>Fast collisions = BOOM!</div>
+        <div>Hold mouse to spawn objects!</div>
+        <div>🎨 Colorful blocks • 🏢 Logo cubes • 😀 Emoji spheres</div>
+        <div>Click any object to launch it!</div>
+        <div>Fast collisions = BOOM! 💥</div>
     </div>
 
     <div class="content-wrapper">
@@ -272,6 +273,18 @@
                 <p><strong>Click any block</strong> to launch it with high velocity in the direction you're looking.</p>
                 <p><strong>Watch them collide!</strong> When blocks hit each other at high speed, they explode into particles.</p>
                 <p>The game uses realistic 3D physics powered by Cannon.js and Three.js for smooth, interactive fun!</p>
+            </div>
+        </div>
+
+        <div class="scroll-hint">↓</div>
+
+        <div class="spacer">
+            <div class="game-instructions">
+                <h2>More Fun Awaits!</h2>
+                <p><strong>Logo blocks</strong> with the YallaClash brand spin and bounce around!</p>
+                <p><strong>Emoji spheres</strong> roll and tumble with realistic physics!</p>
+                <p><strong>Walls and platforms</strong> create more complex interactions!</p>
+                <p>Keep scrolling to explore more of the physics playground!</p>
             </div>
         </div>
     </div>
@@ -334,8 +347,71 @@
         groundMesh.receiveShadow = true;
         scene.add(groundMesh);
 
+        // ===== Walls for more interaction =====
+        function createWall(x, y, z, width, height, depth) {
+            // Physics
+            const wallBody = new CANNON.Body({
+                mass: 0,
+                shape: new CANNON.Box(new CANNON.Vec3(width/2, height/2, depth/2))
+            });
+            wallBody.position.set(x, y, z);
+            world.addBody(wallBody);
+
+            // Visual
+            const wallGeometry = new THREE.BoxGeometry(width, height, depth);
+            const wallMaterial = new THREE.MeshStandardMaterial({
+                color: 0x764ba2,
+                transparent: true,
+                opacity: 0.4
+            });
+            const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
+            wallMesh.position.set(x, y, z);
+            wallMesh.castShadow = true;
+            wallMesh.receiveShadow = true;
+            scene.add(wallMesh);
+        }
+
+        // Create boundary walls
+        createWall(-12, 0, 0, 1, 10, 30);  // Left wall
+        createWall(12, 0, 0, 1, 10, 30);   // Right wall
+        createWall(0, 0, -12, 30, 10, 1);  // Back wall
+        createWall(0, 0, 12, 30, 10, 1);   // Front wall
+
+        // Platforms at different heights
+        function createPlatform(x, y, z, width, depth) {
+            const platformBody = new CANNON.Body({
+                mass: 0,
+                shape: new CANNON.Box(new CANNON.Vec3(width/2, 0.5, depth/2))
+            });
+            platformBody.position.set(x, y, z);
+            world.addBody(platformBody);
+
+            const platformGeometry = new THREE.BoxGeometry(width, 1, depth);
+            const platformMaterial = new THREE.MeshStandardMaterial({
+                color: 0x45B7D1,
+                transparent: true,
+                opacity: 0.5
+            });
+            const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
+            platformMesh.position.set(x, y, z);
+            platformMesh.castShadow = true;
+            platformMesh.receiveShadow = true;
+            scene.add(platformMesh);
+        }
+
+        createPlatform(0, 3, 0, 8, 8);
+        createPlatform(5, 6, -5, 5, 5);
+        createPlatform(-5, 6, 5, 5, 5);
+
+        // ===== Load Logo Texture =====
+        const textureLoader = new THREE.TextureLoader();
+        let logoTexture = null;
+        textureLoader.load('images/logo_galaxy.png', (texture) => {
+            logoTexture = texture;
+        });
+
         // ===== Instanced Mesh System =====
-        const MAX_BLOCKS = 100;
+        const MAX_BLOCKS = 150;
         const EXPLOSION_THRESHOLD = 15;
         const colors = [
             new THREE.Color(0xFF6B6B),
@@ -365,9 +441,190 @@
         blockGeometry.setAttribute('color', new THREE.InstancedBufferAttribute(colorArray, 3));
         scene.add(instancedMesh);
 
+        // ===== Spheres with Emojis =====
+        const spheres = [];
+        const MAX_SPHERES = 50;
+        const emojis = ['😀', '🎮', '🎯', '⚡', '🔥', '💎', '⭐', '🎨', '🚀', '💫'];
+
+        function createEmojiTexture(emoji) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+
+            // Background
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, 128, 128);
+
+            // Emoji
+            ctx.font = '80px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, 64, 64);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        class Sphere {
+            constructor(index, position, emoji) {
+                this.index = index;
+                this.active = true;
+                this.emoji = emoji;
+
+                // Physics body
+                const radius = 0.5 + Math.random() * 0.3;
+                this.radius = radius;
+                this.body = new CANNON.Body({
+                    mass: radius * radius * radius,
+                    shape: new CANNON.Sphere(radius),
+                    position: new CANNON.Vec3(position.x, position.y, position.z),
+                    linearDamping: 0.1,
+                    angularDamping: 0.1
+                });
+
+                // Random initial velocity
+                this.body.velocity.set(
+                    (Math.random() - 0.5) * 5,
+                    Math.random() * 2,
+                    (Math.random() - 0.5) * 5
+                );
+                this.body.angularVelocity.set(
+                    (Math.random() - 0.5) * 5,
+                    (Math.random() - 0.5) * 5,
+                    (Math.random() - 0.5) * 5
+                );
+
+                world.addBody(this.body);
+
+                // Visual
+                const geometry = new THREE.SphereGeometry(radius, 16, 16);
+                const material = new THREE.MeshStandardMaterial({
+                    map: createEmojiTexture(emoji),
+                    metalness: 0.2,
+                    roughness: 0.4
+                });
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.castShadow = true;
+                this.mesh.receiveShadow = true;
+                scene.add(this.mesh);
+
+                // Collision listener
+                this.body.addEventListener('collide', (e) => {
+                    const impactVelocity = e.contact.getImpactVelocityAlongNormal();
+                    if (Math.abs(impactVelocity) > EXPLOSION_THRESHOLD) {
+                        this.explode();
+                    }
+                });
+            }
+
+            update() {
+                if (!this.active) return;
+
+                this.mesh.position.copy(this.body.position);
+                this.mesh.quaternion.copy(this.body.quaternion);
+
+                if (this.body.position.y < -20) {
+                    this.remove();
+                }
+            }
+
+            explode() {
+                const color = new THREE.Color(Math.random(), Math.random(), Math.random());
+                createExplosion(this.body.position, color);
+                this.remove();
+            }
+
+            remove() {
+                this.active = false;
+                world.removeBody(this.body);
+                scene.remove(this.mesh);
+                this.mesh.geometry.dispose();
+                this.mesh.material.dispose();
+            }
+        }
+
         // Block management
         const blocks = [];
+        const logoBlocks = [];
         const dummy = new THREE.Object3D();
+
+        // Logo Block class (individual meshes with logo texture)
+        class LogoBlock {
+            constructor(position) {
+                this.active = true;
+
+                // Physics body
+                const size = 1.2;
+                this.size = size;
+                this.body = new CANNON.Body({
+                    mass: size * size * size,
+                    shape: new CANNON.Box(new CANNON.Vec3(size/2, size/2, size/2)),
+                    position: new CANNON.Vec3(position.x, position.y, position.z),
+                    linearDamping: 0.1,
+                    angularDamping: 0.1
+                });
+
+                // Random initial velocity and spin
+                this.body.velocity.set(
+                    (Math.random() - 0.5) * 5,
+                    Math.random() * 2,
+                    (Math.random() - 0.5) * 5
+                );
+                this.body.angularVelocity.set(
+                    (Math.random() - 0.5) * 5,
+                    (Math.random() - 0.5) * 5,
+                    (Math.random() - 0.5) * 5
+                );
+
+                world.addBody(this.body);
+
+                // Visual with logo texture
+                const geometry = new THREE.BoxGeometry(size, size, size);
+                const material = new THREE.MeshStandardMaterial({
+                    map: logoTexture,
+                    metalness: 0.3,
+                    roughness: 0.4
+                });
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.castShadow = true;
+                this.mesh.receiveShadow = true;
+                scene.add(this.mesh);
+
+                // Collision listener
+                this.body.addEventListener('collide', (e) => {
+                    const impactVelocity = e.contact.getImpactVelocityAlongNormal();
+                    if (Math.abs(impactVelocity) > EXPLOSION_THRESHOLD) {
+                        this.explode();
+                    }
+                });
+            }
+
+            update() {
+                if (!this.active) return;
+
+                this.mesh.position.copy(this.body.position);
+                this.mesh.quaternion.copy(this.body.quaternion);
+
+                if (this.body.position.y < -20) {
+                    this.remove();
+                }
+            }
+
+            explode() {
+                const color = new THREE.Color(0x667eea);
+                createExplosion(this.body.position, color);
+                this.remove();
+            }
+
+            remove() {
+                this.active = false;
+                world.removeBody(this.body);
+                scene.remove(this.mesh);
+                this.mesh.geometry.dispose();
+                this.mesh.material.dispose();
+            }
+        }
 
         class Block {
             constructor(index, position, color) {
@@ -516,29 +773,62 @@
         let spawnTimer = 0;
         const SPAWN_INTERVAL = 0.15; // seconds
 
-        function spawnBlock() {
-            // Auto-cleanup: remove oldest inactive blocks if at max
-            if (blocks.length >= MAX_BLOCKS) {
-                const oldestIndex = blocks.findIndex(b => !b.active);
-                if (oldestIndex !== -1) {
-                    blocks.splice(oldestIndex, 1);
-                } else {
-                    // Remove oldest active block
-                    blocks[0].remove();
-                    blocks.shift();
-                }
-            }
-
+        function spawnObject() {
             const spawnX = (Math.random() - 0.5) * 10;
             const spawnZ = (Math.random() - 0.5) * 10;
-            const color = colors[Math.floor(Math.random() * colors.length)];
+            const spawnY = 10 + Math.random() * 5;
+            const position = new THREE.Vector3(spawnX, spawnY, spawnZ);
 
-            const block = new Block(
-                blocks.length,
-                new THREE.Vector3(spawnX, 10, spawnZ),
-                color
-            );
-            blocks.push(block);
+            // Randomly choose what to spawn
+            const rand = Math.random();
+
+            if (rand < 0.5) {
+                // Spawn regular block (50% chance)
+                if (blocks.length >= MAX_BLOCKS) {
+                    const oldestIndex = blocks.findIndex(b => !b.active);
+                    if (oldestIndex !== -1) {
+                        blocks.splice(oldestIndex, 1);
+                    } else {
+                        blocks[0].remove();
+                        blocks.shift();
+                    }
+                }
+
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const block = new Block(blocks.length, position, color);
+                blocks.push(block);
+
+            } else if (rand < 0.75 && logoTexture) {
+                // Spawn logo block (25% chance, if texture loaded)
+                if (logoBlocks.length >= 20) {
+                    const oldestIndex = logoBlocks.findIndex(b => !b.active);
+                    if (oldestIndex !== -1) {
+                        logoBlocks.splice(oldestIndex, 1);
+                    } else {
+                        logoBlocks[0].remove();
+                        logoBlocks.shift();
+                    }
+                }
+
+                const logoBlock = new LogoBlock(position);
+                logoBlocks.push(logoBlock);
+
+            } else {
+                // Spawn emoji sphere (25% chance)
+                if (spheres.length >= MAX_SPHERES) {
+                    const oldestIndex = spheres.findIndex(s => !s.active);
+                    if (oldestIndex !== -1) {
+                        spheres.splice(oldestIndex, 1);
+                    } else {
+                        spheres[0].remove();
+                        spheres.shift();
+                    }
+                }
+
+                const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+                const sphere = new Sphere(spheres.length, position, emoji);
+                spheres.push(sphere);
+            }
         }
 
         // ===== Mouse/Touch Controls =====
@@ -561,20 +851,22 @@
 
             raycaster.setFromCamera(mouse, camera);
 
-            // Check intersection with blocks
-            for (const block of blocks) {
-                if (!block.active) continue;
+            // Check intersection with all objects
+            const allObjects = [...blocks, ...logoBlocks, ...spheres];
+            for (const obj of allObjects) {
+                if (!obj.active) continue;
 
-                const distance = raycaster.ray.distanceToPoint(block.body.position);
-                if (distance < block.size) {
-                    // Launch block
+                const distance = raycaster.ray.distanceToPoint(obj.body.position);
+                const size = obj.size || obj.radius || 1;
+                if (distance < size) {
+                    // Launch object
                     const direction = raycaster.ray.direction.clone();
-                    block.body.velocity.set(
+                    obj.body.velocity.set(
                         direction.x * 30,
                         direction.y * 30 + 10,
                         direction.z * 30
                     );
-                    block.body.angularVelocity.set(
+                    obj.body.angularVelocity.set(
                         (Math.random() - 0.5) * 20,
                         (Math.random() - 0.5) * 20,
                         (Math.random() - 0.5) * 20
@@ -611,10 +903,13 @@
             // Step physics
             world.step(1/60, deltaTime, 3);
 
-            // Update blocks
+            // Update all objects
             blocks.forEach(block => block.update());
             instancedMesh.instanceMatrix.needsUpdate = true;
             instancedMesh.geometry.attributes.color.needsUpdate = true;
+
+            logoBlocks.forEach(logoBlock => logoBlock.update());
+            spheres.forEach(sphere => sphere.update());
 
             // Update particles
             updateParticles(deltaTime);
@@ -623,7 +918,7 @@
             if (isMouseDown) {
                 spawnTimer += deltaTime;
                 if (spawnTimer >= SPAWN_INTERVAL) {
-                    spawnBlock();
+                    spawnObject();
                     spawnTimer = 0;
                 }
             }
@@ -632,9 +927,9 @@
             renderer.render(scene, camera);
         }
 
-        // Start with a few blocks
-        for (let i = 0; i < 5; i++) {
-            setTimeout(() => spawnBlock(), i * 300);
+        // Start with a few objects
+        for (let i = 0; i < 8; i++) {
+            setTimeout(() => spawnObject(), i * 300);
         }
 
         animate();
