@@ -25,6 +25,12 @@
             color: white;
             padding: 100px 20px;
             overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
         }
 
         .container {
@@ -37,6 +43,10 @@
             border: 1px solid rgba(255, 255, 255, 0.18);
             max-width: 500px;
             width: 90%;
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
         }
 
         .logo {
@@ -172,6 +182,9 @@
             height: 100%;
             pointer-events: auto;
             cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            outline: none;
         }
 
         .content-wrapper {
@@ -256,7 +269,7 @@
     </div>
 
     <div class="game-info">
-        <div>Hold mouse to spawn objects!</div>
+        <div>Objects auto-spawn! Hold to spawn more!</div>
         <div>🎨 Colorful blocks • 🏢 Logo cubes • 😀 Emoji spheres</div>
         <div>Click any object to launch it!</div>
         <div>Hit hard twice = BOOM! 💥</div>
@@ -805,7 +818,9 @@
         // ===== Spawning System =====
         let isMouseDown = false;
         let spawnTimer = 0;
-        const SPAWN_INTERVAL = 0.15; // seconds
+        let autoSpawnTimer = 0;
+        const SPAWN_INTERVAL = 0.15; // seconds for mouse spawn
+        const AUTO_SPAWN_INTERVAL = 2.5; // seconds for automatic spawning
 
         function spawnObject() {
             const spawnX = (Math.random() - 0.5) * 10;
@@ -948,13 +963,20 @@
             // Update particles
             updateParticles(deltaTime);
 
-            // Continuous spawning
+            // Manual spawning (mouse/touch)
             if (isMouseDown) {
                 spawnTimer += deltaTime;
                 if (spawnTimer >= SPAWN_INTERVAL) {
                     spawnObject();
                     spawnTimer = 0;
                 }
+            }
+
+            // Automatic spawning (background)
+            autoSpawnTimer += deltaTime;
+            if (autoSpawnTimer >= AUTO_SPAWN_INTERVAL) {
+                spawnObject();
+                autoSpawnTimer = 0;
             }
 
             // Render
