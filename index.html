@@ -259,7 +259,7 @@
         <div>Hold mouse to spawn objects!</div>
         <div>🎨 Colorful blocks • 🏢 Logo cubes • 😀 Emoji spheres</div>
         <div>Click any object to launch it!</div>
-        <div>Fast collisions = BOOM! 💥</div>
+        <div>Hit hard twice = BOOM! 💥</div>
     </div>
 
     <div class="content-wrapper">
@@ -485,6 +485,7 @@
                 this.index = index;
                 this.active = true;
                 this.emoji = emoji;
+                this.highVelocityHits = 0; // Track high-velocity collisions
 
                 // Physics body
                 const radius = 0.5 + Math.random() * 0.3;
@@ -527,7 +528,10 @@
                 this.body.addEventListener('collide', (e) => {
                     const impactVelocity = e.contact.getImpactVelocityAlongNormal();
                     if (Math.abs(impactVelocity) > EXPLOSION_THRESHOLD) {
-                        this.explode();
+                        this.highVelocityHits++;
+                        if (this.highVelocityHits >= 2) {
+                            this.explode();
+                        }
                     }
                 });
             }
@@ -567,6 +571,7 @@
         class LogoBlock {
             constructor(position) {
                 this.active = true;
+                this.highVelocityHits = 0; // Track high-velocity collisions
 
                 // Physics body
                 const size = 1.2;
@@ -609,7 +614,10 @@
                 this.body.addEventListener('collide', (e) => {
                     const impactVelocity = e.contact.getImpactVelocityAlongNormal();
                     if (Math.abs(impactVelocity) > EXPLOSION_THRESHOLD) {
-                        this.explode();
+                        this.highVelocityHits++;
+                        if (this.highVelocityHits >= 2) {
+                            this.explode();
+                        }
                     }
                 });
             }
@@ -645,6 +653,7 @@
                 this.index = index;
                 this.active = true;
                 this.color = color;
+                this.highVelocityHits = 0; // Track high-velocity collisions
 
                 // Physics body
                 const size = 0.8 + Math.random() * 0.4;
@@ -676,7 +685,10 @@
                 this.body.addEventListener('collide', (e) => {
                     const impactVelocity = e.contact.getImpactVelocityAlongNormal();
                     if (Math.abs(impactVelocity) > EXPLOSION_THRESHOLD) {
-                        this.explode();
+                        this.highVelocityHits++;
+                        if (this.highVelocityHits >= 2) {
+                            this.explode();
+                        }
                     }
                 });
             }
@@ -749,7 +761,8 @@
         }
 
         function createExplosion(position, color) {
-            for (let i = 0; i < 30; i++) {
+            // Create fewer particles per explosion for better performance
+            for (let i = 0; i < 20; i++) {
                 const particleIndex = Math.floor(Math.random() * particleCount);
                 particlePositions[particleIndex * 3] = position.x;
                 particlePositions[particleIndex * 3 + 1] = position.y;
@@ -764,7 +777,7 @@
                     (Math.random() - 0.5) * 15,
                     (Math.random() - 0.5) * 15
                 );
-                particleLives[particleIndex] = 1;
+                particleLives[particleIndex] = 0.8; // Shorter particle lifetime
             }
         }
 
@@ -776,7 +789,14 @@
                     particlePositions[i * 3 + 2] += particleVelocities[i].z * deltaTime;
 
                     particleVelocities[i].y -= 9.8 * deltaTime;
-                    particleLives[i] -= deltaTime;
+                    particleLives[i] -= deltaTime * 1.5; // Decay 50% faster
+
+                    // Clean up dead particles by moving them far away
+                    if (particleLives[i] <= 0) {
+                        particlePositions[i * 3] = 10000;
+                        particlePositions[i * 3 + 1] = 10000;
+                        particlePositions[i * 3 + 2] = 10000;
+                    }
                 }
             }
             particleGeometry.attributes.position.needsUpdate = true;
