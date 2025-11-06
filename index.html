@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YallaClash - Voice. Friends. Games.</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -168,7 +170,8 @@
     </div>
 
     <div class="game-info">
-        <div>Drag blocks to add speed!</div>
+        <div>Hold mouse to spawn blocks!</div>
+        <div>Click blocks to launch them!</div>
         <div>Fast collisions = BOOM!</div>
     </div>
 
@@ -189,324 +192,367 @@
     </div>
 
     <script>
-        // Canvas setup
+        // ===== Three.js Scene Setup =====
         const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+        const scene = new THREE.Scene();
+        scene.background = null; // Transparent background
 
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 15);
+        camera.lookAt(0, 0, 0);
 
-        // Physics constants
-        const GRAVITY = 0.5;
-        const FRICTION = 0.98;
-        const BOUNCE = 0.7;
-        const EXPLOSION_THRESHOLD = 8;
-        const BLOCK_SIZE = 40;
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-        // Game state
-        let blocks = [];
-        let particles = [];
-        let draggedBlock = null;
-        let dragStart = { x: 0, y: 0 };
-        let dragEnd = { x: 0, y: 0 };
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
 
-        // Block class
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 10, 5);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.camera.left = -20;
+        directionalLight.shadow.camera.right = 20;
+        directionalLight.shadow.camera.top = 20;
+        directionalLight.shadow.camera.bottom = -20;
+        scene.add(directionalLight);
+
+        // ===== Cannon.js Physics World Setup =====
+        const world = new CANNON.World();
+        world.gravity.set(0, -20, 0);
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 10;
+        world.defaultContactMaterial.restitution = 0.7;
+
+        // Ground plane
+        const groundBody = new CANNON.Body({
+            mass: 0,
+            shape: new CANNON.Plane()
+        });
+        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+        groundBody.position.set(0, -5, 0);
+        world.addBody(groundBody);
+
+        // Ground visual
+        const groundGeometry = new THREE.PlaneGeometry(50, 50);
+        const groundMaterial = new THREE.MeshStandardMaterial({
+            color: 0x667eea,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+        groundMesh.rotation.x = -Math.PI / 2;
+        groundMesh.position.y = -5;
+        groundMesh.receiveShadow = true;
+        scene.add(groundMesh);
+
+        // ===== Instanced Mesh System =====
+        const MAX_BLOCKS = 100;
+        const EXPLOSION_THRESHOLD = 15;
+        const colors = [
+            new THREE.Color(0xFF6B6B),
+            new THREE.Color(0x4ECDC4),
+            new THREE.Color(0x45B7D1),
+            new THREE.Color(0xFFA07A),
+            new THREE.Color(0x98D8C8),
+            new THREE.Color(0xF7DC6F),
+            new THREE.Color(0xBB8FCE)
+        ];
+
+        const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
+        const blockMaterial = new THREE.MeshStandardMaterial({
+            vertexColors: true,
+            metalness: 0.3,
+            roughness: 0.4
+        });
+
+        // Setup instanced mesh with color attribute
+        const instancedMesh = new THREE.InstancedMesh(blockGeometry, blockMaterial, MAX_BLOCKS);
+        instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        instancedMesh.castShadow = true;
+        instancedMesh.receiveShadow = true;
+
+        // Color attribute for instanced mesh
+        const colorArray = new Float32Array(MAX_BLOCKS * 3);
+        blockGeometry.setAttribute('color', new THREE.InstancedBufferAttribute(colorArray, 3));
+        scene.add(instancedMesh);
+
+        // Block management
+        const blocks = [];
+        const dummy = new THREE.Object3D();
+
         class Block {
-            constructor(x, y, size, color) {
-                this.x = x;
-                this.y = y;
+            constructor(index, position, color) {
+                this.index = index;
+                this.active = true;
+                this.color = color;
+
+                // Physics body
+                const size = 0.8 + Math.random() * 0.4;
                 this.size = size;
-                this.vx = 0;
-                this.vy = 0;
-                this.color = color;
-                this.rotation = Math.random() * Math.PI * 2;
-                this.rotationSpeed = (Math.random() - 0.5) * 0.1;
-                this.isDragging = false;
-                this.mass = size / BLOCK_SIZE;
+                this.body = new CANNON.Body({
+                    mass: size * size * size,
+                    shape: new CANNON.Box(new CANNON.Vec3(size/2, size/2, size/2)),
+                    position: new CANNON.Vec3(position.x, position.y, position.z),
+                    linearDamping: 0.1,
+                    angularDamping: 0.1
+                });
+
+                // Random initial velocity and spin
+                this.body.velocity.set(
+                    (Math.random() - 0.5) * 5,
+                    Math.random() * 2,
+                    (Math.random() - 0.5) * 5
+                );
+                this.body.angularVelocity.set(
+                    (Math.random() - 0.5) * 5,
+                    (Math.random() - 0.5) * 5,
+                    (Math.random() - 0.5) * 5
+                );
+
+                world.addBody(this.body);
+                this.previousVelocity = this.body.velocity.length();
+
+                // Listen for collisions
+                this.body.addEventListener('collide', (e) => {
+                    const impactVelocity = e.contact.getImpactVelocityAlongNormal();
+                    if (Math.abs(impactVelocity) > EXPLOSION_THRESHOLD) {
+                        this.explode();
+                    }
+                });
             }
 
             update() {
-                if (!this.isDragging) {
-                    // Apply gravity
-                    this.vy += GRAVITY;
+                if (!this.active) return;
 
-                    // Apply velocity
-                    this.x += this.vx;
-                    this.y += this.vy;
+                // Update instanced mesh
+                dummy.position.copy(this.body.position);
+                dummy.quaternion.copy(this.body.quaternion);
+                dummy.scale.setScalar(this.size);
+                dummy.updateMatrix();
+                instancedMesh.setMatrixAt(this.index, dummy.matrix);
 
-                    // Apply friction
-                    this.vx *= FRICTION;
-                    this.vy *= FRICTION;
+                // Set color
+                instancedMesh.geometry.attributes.color.setXYZ(
+                    this.index,
+                    this.color.r,
+                    this.color.g,
+                    this.color.b
+                );
 
-                    // Apply rotation
-                    this.rotation += this.rotationSpeed;
-
-                    // Boundary collisions
-                    if (this.x - this.size / 2 < 0) {
-                        this.x = this.size / 2;
-                        this.vx = Math.abs(this.vx) * BOUNCE;
-                    }
-                    if (this.x + this.size / 2 > canvas.width) {
-                        this.x = canvas.width - this.size / 2;
-                        this.vx = -Math.abs(this.vx) * BOUNCE;
-                    }
-                    if (this.y + this.size / 2 > canvas.height) {
-                        this.y = canvas.height - this.size / 2;
-                        this.vy = -Math.abs(this.vy) * BOUNCE;
-                        this.vx *= 0.95;
-                    }
+                // Check if fallen off
+                if (this.body.position.y < -20) {
+                    this.remove();
                 }
             }
 
-            draw() {
-                ctx.save();
-                ctx.translate(this.x, this.y);
-                ctx.rotate(this.rotation);
-                ctx.fillStyle = this.color;
-                ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
-
-                // Add shine effect
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.fillRect(-this.size / 2, -this.size / 2, this.size / 2, this.size / 2);
-
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(-this.size / 2, -this.size / 2, this.size, this.size);
-                ctx.restore();
+            explode() {
+                createExplosion(this.body.position, this.color);
+                this.remove();
             }
 
-            getSpeed() {
-                return Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+            remove() {
+                this.active = false;
+                world.removeBody(this.body);
+                // Hide the instance
+                dummy.scale.setScalar(0);
+                dummy.updateMatrix();
+                instancedMesh.setMatrixAt(this.index, dummy.matrix);
             }
         }
 
-        // Particle class for explosions
-        class Particle {
-            constructor(x, y, color) {
-                this.x = x;
-                this.y = y;
-                this.vx = (Math.random() - 0.5) * 15;
-                this.vy = (Math.random() - 0.5) * 15;
-                this.life = 1;
-                this.color = color;
-                this.size = Math.random() * 6 + 2;
-            }
+        // Particle system for explosions
+        const particleGeometry = new THREE.BufferGeometry();
+        const particleCount = 500;
+        const particlePositions = new Float32Array(particleCount * 3);
+        const particleColors = new Float32Array(particleCount * 3);
+        const particleVelocities = [];
+        const particleLives = [];
 
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.vy += GRAVITY * 0.5;
-                this.life -= 0.02;
-                this.vx *= 0.98;
-                this.vy *= 0.98;
-            }
+        particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+        particleGeometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
 
-            draw() {
-                ctx.save();
-                ctx.globalAlpha = this.life;
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
-            }
+        const particleMaterial = new THREE.PointsMaterial({
+            size: 0.3,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending
+        });
+
+        const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
+        scene.add(particleSystem);
+
+        // Initialize particles as inactive
+        for (let i = 0; i < particleCount; i++) {
+            particleVelocities.push(new THREE.Vector3());
+            particleLives.push(0);
         }
 
-        // Check collision between two blocks
-        function checkCollision(block1, block2) {
-            const dx = block2.x - block1.x;
-            const dy = block2.y - block1.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const minDist = (block1.size + block2.size) / 2;
-
-            if (distance < minDist) {
-                // Calculate collision normal
-                const nx = dx / distance;
-                const ny = dy / distance;
-
-                // Separate blocks
-                const overlap = minDist - distance;
-                const totalMass = block1.mass + block2.mass;
-                block1.x -= nx * overlap * (block2.mass / totalMass);
-                block1.y -= ny * overlap * (block2.mass / totalMass);
-                block2.x += nx * overlap * (block1.mass / totalMass);
-                block2.y += ny * overlap * (block1.mass / totalMass);
-
-                // Calculate relative velocity
-                const dvx = block2.vx - block1.vx;
-                const dvy = block2.vy - block1.vy;
-                const dotProduct = dvx * nx + dvy * ny;
-
-                // Calculate collision speed
-                const collisionSpeed = Math.abs(dotProduct);
-
-                // Apply impulse
-                const impulse = (2 * dotProduct) / totalMass;
-                block1.vx += impulse * block2.mass * nx * BOUNCE;
-                block1.vy += impulse * block2.mass * ny * BOUNCE;
-                block2.vx -= impulse * block1.mass * nx * BOUNCE;
-                block2.vy -= impulse * block1.mass * ny * BOUNCE;
-
-                // Check for explosion
-                if (collisionSpeed > EXPLOSION_THRESHOLD) {
-                    createExplosion(
-                        (block1.x + block2.x) / 2,
-                        (block1.y + block2.y) / 2,
-                        block1.color
-                    );
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        // Create explosion effect
-        function createExplosion(x, y, color) {
+        function createExplosion(position, color) {
             for (let i = 0; i < 30; i++) {
-                particles.push(new Particle(x, y, color));
+                const particleIndex = Math.floor(Math.random() * particleCount);
+                particlePositions[particleIndex * 3] = position.x;
+                particlePositions[particleIndex * 3 + 1] = position.y;
+                particlePositions[particleIndex * 3 + 2] = position.z;
+
+                particleColors[particleIndex * 3] = color.r;
+                particleColors[particleIndex * 3 + 1] = color.g;
+                particleColors[particleIndex * 3 + 2] = color.b;
+
+                particleVelocities[particleIndex].set(
+                    (Math.random() - 0.5) * 15,
+                    (Math.random() - 0.5) * 15,
+                    (Math.random() - 0.5) * 15
+                );
+                particleLives[particleIndex] = 1;
             }
         }
 
-        // Mouse/touch handling
-        function getMousePos(e) {
-            const rect = canvas.getBoundingClientRect();
-            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-            return {
-                x: clientX - rect.left,
-                y: clientY - rect.top
-            };
-        }
+        function updateParticles(deltaTime) {
+            for (let i = 0; i < particleCount; i++) {
+                if (particleLives[i] > 0) {
+                    particlePositions[i * 3] += particleVelocities[i].x * deltaTime;
+                    particlePositions[i * 3 + 1] += particleVelocities[i].y * deltaTime;
+                    particlePositions[i * 3 + 2] += particleVelocities[i].z * deltaTime;
 
-        function findBlockAt(x, y) {
-            for (let i = blocks.length - 1; i >= 0; i--) {
-                const block = blocks[i];
-                if (Math.abs(x - block.x) < block.size / 2 &&
-                    Math.abs(y - block.y) < block.size / 2) {
-                    return block;
+                    particleVelocities[i].y -= 9.8 * deltaTime;
+                    particleLives[i] -= deltaTime;
                 }
             }
-            return null;
+            particleGeometry.attributes.position.needsUpdate = true;
         }
 
-        canvas.addEventListener('mousedown', handleStart);
-        canvas.addEventListener('touchstart', handleStart);
+        // ===== Spawning System =====
+        let isMouseDown = false;
+        let spawnTimer = 0;
+        const SPAWN_INTERVAL = 0.15; // seconds
 
-        function handleStart(e) {
-            e.preventDefault();
-            const pos = getMousePos(e);
-            const block = findBlockAt(pos.x, pos.y);
-
-            if (block) {
-                draggedBlock = block;
-                draggedBlock.isDragging = true;
-                dragStart = { x: pos.x, y: pos.y };
-                dragEnd = { x: pos.x, y: pos.y };
-            }
-        }
-
-        canvas.addEventListener('mousemove', handleMove);
-        canvas.addEventListener('touchmove', handleMove);
-
-        function handleMove(e) {
-            if (draggedBlock) {
-                e.preventDefault();
-                const pos = getMousePos(e);
-                dragEnd = { x: pos.x, y: pos.y };
-                draggedBlock.x = pos.x;
-                draggedBlock.y = pos.y;
-            }
-        }
-
-        canvas.addEventListener('mouseup', handleEnd);
-        canvas.addEventListener('touchend', handleEnd);
-
-        function handleEnd(e) {
-            if (draggedBlock) {
-                e.preventDefault();
-                const velocityMultiplier = 0.3;
-                draggedBlock.vx = (dragEnd.x - dragStart.x) * velocityMultiplier;
-                draggedBlock.vy = (dragEnd.y - dragStart.y) * velocityMultiplier;
-                draggedBlock.isDragging = false;
-                draggedBlock.rotationSpeed = draggedBlock.vx * 0.01;
-                draggedBlock = null;
-            }
-        }
-
-        // Spawn blocks periodically
         function spawnBlock() {
-            const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE'];
-            const x = Math.random() * (canvas.width - BLOCK_SIZE) + BLOCK_SIZE / 2;
-            const size = BLOCK_SIZE + Math.random() * 20;
-            const color = colors[Math.floor(Math.random() * colors.length)];
-            blocks.push(new Block(x, -size, size, color));
-        }
-
-        // Initial blocks
-        for (let i = 0; i < 5; i++) {
-            setTimeout(() => spawnBlock(), i * 500);
-        }
-
-        // Spawn new blocks every few seconds
-        setInterval(() => {
-            if (blocks.length < 15) {
-                spawnBlock();
+            // Auto-cleanup: remove oldest inactive blocks if at max
+            if (blocks.length >= MAX_BLOCKS) {
+                const oldestIndex = blocks.findIndex(b => !b.active);
+                if (oldestIndex !== -1) {
+                    blocks.splice(oldestIndex, 1);
+                } else {
+                    // Remove oldest active block
+                    blocks[0].remove();
+                    blocks.shift();
+                }
             }
-        }, 2000);
 
-        // Game loop
-        function gameLoop() {
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const spawnX = (Math.random() - 0.5) * 10;
+            const spawnZ = (Math.random() - 0.5) * 10;
+            const color = colors[Math.floor(Math.random() * colors.length)];
 
-            // Update and draw particles
-            particles = particles.filter(p => p.life > 0);
-            particles.forEach(p => {
-                p.update();
-                p.draw();
-            });
+            const block = new Block(
+                blocks.length,
+                new THREE.Vector3(spawnX, 10, spawnZ),
+                color
+            );
+            blocks.push(block);
+        }
+
+        // ===== Mouse/Touch Controls =====
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function onPointerDown(event) {
+            isMouseDown = true;
+            spawnTimer = SPAWN_INTERVAL; // Spawn immediately
+        }
+
+        function onPointerUp(event) {
+            isMouseDown = false;
+        }
+
+        function onPointerClick(event) {
+            // Calculate mouse position
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+
+            // Check intersection with blocks
+            for (const block of blocks) {
+                if (!block.active) continue;
+
+                const distance = raycaster.ray.distanceToPoint(block.body.position);
+                if (distance < block.size) {
+                    // Launch block
+                    const direction = raycaster.ray.direction.clone();
+                    block.body.velocity.set(
+                        direction.x * 30,
+                        direction.y * 30 + 10,
+                        direction.z * 30
+                    );
+                    block.body.angularVelocity.set(
+                        (Math.random() - 0.5) * 20,
+                        (Math.random() - 0.5) * 20,
+                        (Math.random() - 0.5) * 20
+                    );
+                    break;
+                }
+            }
+        }
+
+        canvas.addEventListener('mousedown', onPointerDown);
+        canvas.addEventListener('mouseup', onPointerUp);
+        canvas.addEventListener('click', onPointerClick);
+        canvas.addEventListener('touchstart', onPointerDown);
+        canvas.addEventListener('touchend', onPointerUp);
+
+        // ===== Resize Handler =====
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ===== Game Loop =====
+        const clock = new THREE.Clock();
+        let lastTime = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const currentTime = clock.getElapsedTime();
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            // Step physics
+            world.step(1/60, deltaTime, 3);
 
             // Update blocks
             blocks.forEach(block => block.update());
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            instancedMesh.geometry.attributes.color.needsUpdate = true;
 
-            // Check collisions
-            for (let i = 0; i < blocks.length; i++) {
-                for (let j = i + 1; j < blocks.length; j++) {
-                    const exploded = checkCollision(blocks[i], blocks[j]);
-                    if (exploded) {
-                        // Remove one of the blocks
-                        blocks.splice(j, 1);
-                        j--;
-                    }
+            // Update particles
+            updateParticles(deltaTime);
+
+            // Continuous spawning
+            if (isMouseDown) {
+                spawnTimer += deltaTime;
+                if (spawnTimer >= SPAWN_INTERVAL) {
+                    spawnBlock();
+                    spawnTimer = 0;
                 }
             }
 
-            // Remove blocks that fall off screen
-            blocks = blocks.filter(block => block.y < canvas.height + 200);
-
-            // Draw blocks
-            blocks.forEach(block => block.draw());
-
-            // Draw drag line
-            if (draggedBlock) {
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-                ctx.lineWidth = 3;
-                ctx.setLineDash([5, 5]);
-                ctx.beginPath();
-                ctx.moveTo(dragStart.x, dragStart.y);
-                ctx.lineTo(dragEnd.x, dragEnd.y);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-
-            requestAnimationFrame(gameLoop);
+            // Render
+            renderer.render(scene, camera);
         }
 
-        gameLoop();
+        // Start with a few blocks
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => spawnBlock(), i * 300);
+        }
+
+        animate();
     </script>
 </body>
 </html>
