@@ -120,21 +120,393 @@
                 height: 120px;
             }
         }
+
+        /* Canvas Game Styles */
+        .game-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+
+        .content-wrapper {
+            position: relative;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .content-wrapper > * {
+            pointer-events: auto;
+        }
+
+        .game-info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            z-index: 3;
+            color: white;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <img src="images/logo_galaxy.png" alt="YallaClash Logo" class="logo">
-        <h1>YallaClash</h1>
-        <p class="tagline">Voice. Friends. Games.</p>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+    </div>
 
-        <div class="links">
-            <a href="policy.html" class="btn btn-primary">Privacy Policy</a>
-        </div>
+    <div class="game-info">
+        <div>Drag blocks to add speed!</div>
+        <div>Fast collisions = BOOM!</div>
+    </div>
 
-        <div class="footer">
-            <p>&copy; 2025 DRMSI. All rights reserved.</p>
+    <div class="content-wrapper">
+        <div class="container">
+            <img src="images/logo_galaxy.png" alt="YallaClash Logo" class="logo">
+            <h1>YallaClash</h1>
+            <p class="tagline">Voice. Friends. Games.</p>
+
+            <div class="links">
+                <a href="policy.html" class="btn btn-primary">Privacy Policy</a>
+            </div>
+
+            <div class="footer">
+                <p>&copy; 2025 DRMSI. All rights reserved.</p>
+            </div>
         </div>
     </div>
+
+    <script>
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Physics constants
+        const GRAVITY = 0.5;
+        const FRICTION = 0.98;
+        const BOUNCE = 0.7;
+        const EXPLOSION_THRESHOLD = 8;
+        const BLOCK_SIZE = 40;
+
+        // Game state
+        let blocks = [];
+        let particles = [];
+        let draggedBlock = null;
+        let dragStart = { x: 0, y: 0 };
+        let dragEnd = { x: 0, y: 0 };
+
+        // Block class
+        class Block {
+            constructor(x, y, size, color) {
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                this.vx = 0;
+                this.vy = 0;
+                this.color = color;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.1;
+                this.isDragging = false;
+                this.mass = size / BLOCK_SIZE;
+            }
+
+            update() {
+                if (!this.isDragging) {
+                    // Apply gravity
+                    this.vy += GRAVITY;
+
+                    // Apply velocity
+                    this.x += this.vx;
+                    this.y += this.vy;
+
+                    // Apply friction
+                    this.vx *= FRICTION;
+                    this.vy *= FRICTION;
+
+                    // Apply rotation
+                    this.rotation += this.rotationSpeed;
+
+                    // Boundary collisions
+                    if (this.x - this.size / 2 < 0) {
+                        this.x = this.size / 2;
+                        this.vx = Math.abs(this.vx) * BOUNCE;
+                    }
+                    if (this.x + this.size / 2 > canvas.width) {
+                        this.x = canvas.width - this.size / 2;
+                        this.vx = -Math.abs(this.vx) * BOUNCE;
+                    }
+                    if (this.y + this.size / 2 > canvas.height) {
+                        this.y = canvas.height - this.size / 2;
+                        this.vy = -Math.abs(this.vy) * BOUNCE;
+                        this.vx *= 0.95;
+                    }
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.fillStyle = this.color;
+                ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+
+                // Add shine effect
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fillRect(-this.size / 2, -this.size / 2, this.size / 2, this.size / 2);
+
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(-this.size / 2, -this.size / 2, this.size, this.size);
+                ctx.restore();
+            }
+
+            getSpeed() {
+                return Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+            }
+        }
+
+        // Particle class for explosions
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 15;
+                this.vy = (Math.random() - 0.5) * 15;
+                this.life = 1;
+                this.color = color;
+                this.size = Math.random() * 6 + 2;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += GRAVITY * 0.5;
+                this.life -= 0.02;
+                this.vx *= 0.98;
+                this.vy *= 0.98;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Check collision between two blocks
+        function checkCollision(block1, block2) {
+            const dx = block2.x - block1.x;
+            const dy = block2.y - block1.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const minDist = (block1.size + block2.size) / 2;
+
+            if (distance < minDist) {
+                // Calculate collision normal
+                const nx = dx / distance;
+                const ny = dy / distance;
+
+                // Separate blocks
+                const overlap = minDist - distance;
+                const totalMass = block1.mass + block2.mass;
+                block1.x -= nx * overlap * (block2.mass / totalMass);
+                block1.y -= ny * overlap * (block2.mass / totalMass);
+                block2.x += nx * overlap * (block1.mass / totalMass);
+                block2.y += ny * overlap * (block1.mass / totalMass);
+
+                // Calculate relative velocity
+                const dvx = block2.vx - block1.vx;
+                const dvy = block2.vy - block1.vy;
+                const dotProduct = dvx * nx + dvy * ny;
+
+                // Calculate collision speed
+                const collisionSpeed = Math.abs(dotProduct);
+
+                // Apply impulse
+                const impulse = (2 * dotProduct) / totalMass;
+                block1.vx += impulse * block2.mass * nx * BOUNCE;
+                block1.vy += impulse * block2.mass * ny * BOUNCE;
+                block2.vx -= impulse * block1.mass * nx * BOUNCE;
+                block2.vy -= impulse * block1.mass * ny * BOUNCE;
+
+                // Check for explosion
+                if (collisionSpeed > EXPLOSION_THRESHOLD) {
+                    createExplosion(
+                        (block1.x + block2.x) / 2,
+                        (block1.y + block2.y) / 2,
+                        block1.color
+                    );
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Create explosion effect
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 30; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        // Mouse/touch handling
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function findBlockAt(x, y) {
+            for (let i = blocks.length - 1; i >= 0; i--) {
+                const block = blocks[i];
+                if (Math.abs(x - block.x) < block.size / 2 &&
+                    Math.abs(y - block.y) < block.size / 2) {
+                    return block;
+                }
+            }
+            return null;
+        }
+
+        canvas.addEventListener('mousedown', handleStart);
+        canvas.addEventListener('touchstart', handleStart);
+
+        function handleStart(e) {
+            e.preventDefault();
+            const pos = getMousePos(e);
+            const block = findBlockAt(pos.x, pos.y);
+
+            if (block) {
+                draggedBlock = block;
+                draggedBlock.isDragging = true;
+                dragStart = { x: pos.x, y: pos.y };
+                dragEnd = { x: pos.x, y: pos.y };
+            }
+        }
+
+        canvas.addEventListener('mousemove', handleMove);
+        canvas.addEventListener('touchmove', handleMove);
+
+        function handleMove(e) {
+            if (draggedBlock) {
+                e.preventDefault();
+                const pos = getMousePos(e);
+                dragEnd = { x: pos.x, y: pos.y };
+                draggedBlock.x = pos.x;
+                draggedBlock.y = pos.y;
+            }
+        }
+
+        canvas.addEventListener('mouseup', handleEnd);
+        canvas.addEventListener('touchend', handleEnd);
+
+        function handleEnd(e) {
+            if (draggedBlock) {
+                e.preventDefault();
+                const velocityMultiplier = 0.3;
+                draggedBlock.vx = (dragEnd.x - dragStart.x) * velocityMultiplier;
+                draggedBlock.vy = (dragEnd.y - dragStart.y) * velocityMultiplier;
+                draggedBlock.isDragging = false;
+                draggedBlock.rotationSpeed = draggedBlock.vx * 0.01;
+                draggedBlock = null;
+            }
+        }
+
+        // Spawn blocks periodically
+        function spawnBlock() {
+            const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE'];
+            const x = Math.random() * (canvas.width - BLOCK_SIZE) + BLOCK_SIZE / 2;
+            const size = BLOCK_SIZE + Math.random() * 20;
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            blocks.push(new Block(x, -size, size, color));
+        }
+
+        // Initial blocks
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => spawnBlock(), i * 500);
+        }
+
+        // Spawn new blocks every few seconds
+        setInterval(() => {
+            if (blocks.length < 15) {
+                spawnBlock();
+            }
+        }, 2000);
+
+        // Game loop
+        function gameLoop() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update and draw particles
+            particles = particles.filter(p => p.life > 0);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            // Update blocks
+            blocks.forEach(block => block.update());
+
+            // Check collisions
+            for (let i = 0; i < blocks.length; i++) {
+                for (let j = i + 1; j < blocks.length; j++) {
+                    const exploded = checkCollision(blocks[i], blocks[j]);
+                    if (exploded) {
+                        // Remove one of the blocks
+                        blocks.splice(j, 1);
+                        j--;
+                    }
+                }
+            }
+
+            // Remove blocks that fall off screen
+            blocks = blocks.filter(block => block.y < canvas.height + 200);
+
+            // Draw blocks
+            blocks.forEach(block => block.draw());
+
+            // Draw drag line
+            if (draggedBlock) {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(dragStart.x, dragStart.y);
+                ctx.lineTo(dragEnd.x, dragEnd.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
 </body>
 </html>
