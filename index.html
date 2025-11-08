@@ -125,6 +125,34 @@
             box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
         }
 
+        .btn-store {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .btn-store:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(255, 255, 255, 0.3);
+        }
+
+        .store-buttons {
+            display: flex;
+            flex-direction: row;
+            gap: 15px;
+            margin-bottom: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 600px) {
+            .store-buttons {
+                flex-direction: column;
+            }
+        }
+
         .footer {
             margin-top: 40px;
             font-size: 0.9em;
@@ -283,6 +311,14 @@
             <p class="slogan">Where Friends Meet, Games Begin</p>
 
             <div class="links">
+                <div class="store-buttons">
+                    <a href="https://play.google.com/store/apps/dev?id=7509485406304298835" target="_blank" rel="noopener noreferrer" class="btn btn-store">
+                        📱 Get on Google Play
+                    </a>
+                    <a href="https://apps.apple.com/tt/developer/mohammad-ibreighith/id911144500" target="_blank" rel="noopener noreferrer" class="btn btn-store">
+                        🍎 Get on App Store
+                    </a>
+                </div>
                 <a href="policy.html" class="btn btn-primary">Privacy Policy</a>
             </div>
 
