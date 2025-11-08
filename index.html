@@ -126,16 +126,25 @@
         }
 
         .btn-store {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: transparent;
             color: white;
             font-weight: 600;
-            border: 2px solid rgba(255, 255, 255, 0.5);
+            border: none;
+            padding: 0;
+            display: inline-block;
         }
 
         .btn-store:hover {
-            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(255, 255, 255, 0.3);
+            background: transparent;
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .btn-store img {
+            height: 54px;
+            width: auto;
+            display: block;
+            border-radius: 8px;
         }
 
         .store-buttons {
@@ -312,11 +321,11 @@
 
             <div class="links">
                 <div class="store-buttons">
-                    <a href="https://play.google.com/store/apps/dev?id=7509485406304298835" target="_blank" rel="noopener noreferrer" class="btn btn-store">
-                        📱 Get on Google Play
+                    <a href="https://play.google.com/store/apps/dev?id=7509485406304298835" target="_blank" rel="noopener noreferrer" class="btn-store">
+                        <img src="images/google-play-badge.svg" alt="Get it on Google Play">
                     </a>
-                    <a href="https://apps.apple.com/tt/developer/mohammad-ibreighith/id911144500" target="_blank" rel="noopener noreferrer" class="btn btn-store">
-                        🍎 Get on App Store
+                    <a href="https://apps.apple.com/tt/developer/mohammad-ibreighith/id911144500" target="_blank" rel="noopener noreferrer" class="btn-store">
+                        <img src="images/app-store-badge.svg" alt="Download on the App Store">
                     </a>
                 </div>
                 <a href="policy.html" class="btn btn-primary">Privacy Policy</a>
