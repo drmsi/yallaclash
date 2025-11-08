@@ -161,6 +161,50 @@
             }
         }
 
+        .social-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2.5rem;
+            margin: 20px 0;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .social-title {
+            font-size: 1.3rem;
+            margin-bottom: 1.5rem;
+            font-weight: 500;
+        }
+
+        .social-links {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .social-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 64px;
+            height: 64px;
+            background: transparent;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .social-link:hover {
+            transform: scale(1.15);
+        }
+
+        .social-link img {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+        }
+
         .footer {
             margin-top: 40px;
             font-size: 0.9em;
@@ -199,6 +243,20 @@
 
             .game-instructions p {
                 font-size: 1em;
+            }
+
+            .social-section {
+                padding: 1.5rem;
+            }
+
+            .social-link {
+                width: 56px;
+                height: 56px;
+            }
+
+            .social-link img {
+                width: 36px;
+                height: 36px;
             }
         }
 
@@ -309,6 +367,40 @@
                         <img src="https://upload.wikimedia.org/wikipedia/commons/3/3c/Download_on_the_App_Store_Badge.svg" alt="Download on the App Store">
                     </a>
                 </div>
+
+                <div class="social-section">
+                    <h2 class="social-title">Connect With Us</h2>
+                    <div class="social-links">
+                        <a href="https://www.youtube.com/@YallaClash?sub_confirmation=1" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="YouTube">
+                            <img src="icons/youtube.svg" alt="YouTube">
+                        </a>
+                        <a href="https://www.facebook.com/YallaClash/" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="Facebook">
+                            <img src="icons/facebook.svg" alt="Facebook">
+                        </a>
+                        <a href="https://www.instagram.com/yallaclash/" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="Instagram">
+                            <img src="icons/instagram.svg" alt="Instagram">
+                        </a>
+                        <a href="https://www.snapchat.com/@yallaclash" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="Snapchat">
+                            <img src="icons/snapchat.svg" alt="Snapchat">
+                        </a>
+                        <a href="https://x.com/YallaClash" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="X (Twitter)">
+                            <img src="icons/x.svg" alt="X">
+                        </a>
+                        <a href="https://discord.com/channels/@yallaclash" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="Discord">
+                            <img src="icons/discord.svg" alt="Discord">
+                        </a>
+                        <a href="https://www.tiktok.com/@yallaclash.com" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="TikTok">
+                            <img src="icons/tiktok.svg" alt="TikTok">
+                        </a>
+                        <a href="https://telegram.me/YallaClash" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="Telegram">
+                            <img src="icons/telegram.svg" alt="Telegram">
+                        </a>
+                        <a href="https://www.whatsapp.com/channel/0029VbBwg5W6hENzlTwDzU41" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="WhatsApp">
+                            <img src="icons/whatsapp.svg" alt="WhatsApp">
+                        </a>
+                    </div>
+                </div>
+
                 <a href="policy.html" class="btn btn-primary">Privacy Policy</a>
             </div>
 
